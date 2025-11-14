@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plane, Calendar, Users } from 'lucide-react';
+import { Plane, Calendar, Users, TrendingDown } from 'lucide-react';
 import type { FlightSearchParams } from '@/types';
 
 interface FlightSearchProps {
@@ -16,30 +16,45 @@ interface FlightSearchProps {
 export function FlightSearch({ onSearch, loading = false }: FlightSearchProps) {
   const [origin, setOrigin] = useState('EZE');
   const [destination, setDestination] = useState('SFO');
-  const [departDate, setDepartDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + 30);
-    return date.toISOString().split('T')[0];
-  });
-  const [returnDate, setReturnDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + 37);
-    return date.toISOString().split('T')[0];
-  });
+  const [departDate, setDepartDate] = useState('');
+  const [returnDate, setReturnDate] = useState('');
+  const [departMonth, setDepartMonth] = useState('');
   const [passengers, setPassengers] = useState(1);
   const [flightClass, setFlightClass] = useState<'economy' | 'business' | 'first'>('economy');
+  const [flexibleDates, setFlexibleDates] = useState(false);
+  const [searchCheapest, setSearchCheapest] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Si busca fechas flexibles o más baratas, usar fecha aproximada o actual
+    let searchDepartDate: Date;
+
+    if (searchCheapest || flexibleDates) {
+      if (departMonth) {
+        // Usar el primer día del mes seleccionado
+        searchDepartDate = new Date(departMonth + '-01');
+      } else {
+        // Usar fecha 30 días adelante por defecto
+        searchDepartDate = new Date();
+        searchDepartDate.setDate(searchDepartDate.getDate() + 30);
+      }
+    } else {
+      if (!departDate) {
+        alert('Por favor selecciona una fecha de ida o activa "Fechas flexibles"');
+        return;
+      }
+      searchDepartDate = new Date(departDate);
+    }
+
     const params: FlightSearchParams = {
       origin: origin.toUpperCase(),
       destination: destination.toUpperCase(),
-      departDate: new Date(departDate),
+      departDate: searchDepartDate,
       returnDate: returnDate ? new Date(returnDate) : undefined,
       passengers,
       class: flightClass,
-      flexDays: 0,
+      flexDays: searchCheapest ? 30 : flexibleDates ? 7 : 0,
     };
 
     onSearch(params);
@@ -94,21 +109,70 @@ export function FlightSearch({ onSearch, loading = false }: FlightSearchProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Fecha de ida */}
-            <div className="space-y-2">
-              <Label htmlFor="departDate" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Fecha de ida
-              </Label>
-              <Input
-                id="departDate"
-                type="date"
-                value={departDate}
-                onChange={(e) => setDepartDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                required
+          {/* Opciones de búsqueda flexible */}
+          <div className="space-y-3 p-4 bg-muted/30 rounded-lg">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={flexibleDates}
+                onChange={(e) => {
+                  setFlexibleDates(e.target.checked);
+                  if (e.target.checked) setSearchCheapest(false);
+                }}
+                className="rounded border-gray-300"
               />
+              <span className="text-sm font-medium">Fechas flexibles (±7 días)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={searchCheapest}
+                onChange={(e) => {
+                  setSearchCheapest(e.target.checked);
+                  if (e.target.checked) setFlexibleDates(false);
+                }}
+                className="rounded border-gray-300"
+              />
+              <div className="flex items-center gap-2">
+                <TrendingDown className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium">Buscar fecha más barata (±30 días)</span>
+              </div>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Fecha de ida o mes */}
+            <div className="space-y-2">
+              <Label htmlFor={searchCheapest || flexibleDates ? "departMonth" : "departDate"} className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                {searchCheapest || flexibleDates ? 'Mes aproximado (opcional)' : 'Fecha de ida (opcional)'}
+              </Label>
+              {searchCheapest || flexibleDates ? (
+                <Input
+                  id="departMonth"
+                  type="month"
+                  value={departMonth}
+                  onChange={(e) => setDepartMonth(e.target.value)}
+                  min={new Date().toISOString().slice(0, 7)}
+                  placeholder="Ej: 2025-03"
+                />
+              ) : (
+                <Input
+                  id="departDate"
+                  type="date"
+                  value={departDate}
+                  onChange={(e) => setDepartDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  placeholder="Selecciona una fecha"
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                {searchCheapest
+                  ? 'Buscaremos el precio más bajo en ±30 días'
+                  : flexibleDates
+                  ? 'Buscaremos en ±7 días de esta fecha'
+                  : 'Deja vacío para búsqueda general'}
+              </p>
             </div>
 
             {/* Fecha de vuelta */}
@@ -122,8 +186,12 @@ export function FlightSearch({ onSearch, loading = false }: FlightSearchProps) {
                 type="date"
                 value={returnDate}
                 onChange={(e) => setReturnDate(e.target.value)}
-                min={departDate}
+                min={departDate || new Date().toISOString().split('T')[0]}
+                placeholder="Solo ida si vacío"
               />
+              <p className="text-xs text-muted-foreground">
+                Déjalo vacío para solo ida
+              </p>
             </div>
           </div>
 

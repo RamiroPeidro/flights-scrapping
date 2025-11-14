@@ -12,12 +12,21 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
   }).format(amount)
 }
 
-export function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat('es-AR', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(date)
+export function formatDate(date: Date | string | null | undefined): string {
+  if (!date) return '-';
+
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(dateObj.getTime())) return '-';
+
+    return new Intl.DateTimeFormat('es-AR', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(dateObj);
+  } catch (error) {
+    return '-';
+  }
 }
 
 export function formatDuration(minutes: number): string {
